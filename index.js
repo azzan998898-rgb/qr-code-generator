@@ -6,15 +6,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/**
- * Health Check
- */
 app.get('/', (req, res) => res.status(200).send('QR Generator API is online.'));
 
-/**
- * POST /generate
- * Returns RAW SVG for clean viewing or JSON for PNG Base64.
- */
 app.post('/generate', async (req, res) => {
     const { 
         text, 
@@ -38,27 +31,29 @@ app.post('/generate', async (req, res) => {
     };
 
     try {
-        // --- SVG FORMAT (Direct Raw Response) ---
+        // --- SVG FORMAT ---
         if (format.toLowerCase() === 'svg') {
-            const svgString = await QRCode.toString(text, { ...options, type: 'svg' });
+            // Generate the raw SVG string
+            let svgString = await QRCode.toString(text, { ...options, type: 'svg' });
             
-            // This header tells browsers and apps "This is an image, not just text"
+            /** * FIX: Some browsers need the XML declaration to render correctly 
+             * when sent as a standalone file.
+             */
+            if (!svgString.includes('xmlns')) {
+                svgString = svgString.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+            }
+
             res.setHeader('Content-Type', 'image/svg+xml');
-            
-            // We send the string directly. 
-            // This prevents JSON from adding backslashes (\") to the quotes.
+            // We use .send() to keep it as raw image data
             return res.status(200).send(svgString);
         }
 
-        // --- PNG FORMAT (JSON Response) ---
+        // --- PNG FORMAT ---
         const qrDataUri = await QRCode.toDataURL(text, options);
-        
         res.status(200).json({
             success: true,
             format: 'png',
-            size: `${size}x${size}`,
-            data: qrDataUri,
-            message: 'Use this string in the src attribute of an <img> tag.'
+            data: qrDataUri
         });
 
     } catch (err) {
