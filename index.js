@@ -18,46 +18,43 @@ app.post('/generate', async (req, res) => {
         size = 400 
     } = req.body;
 
-    if (!text) return res.status(400).send('Error: Text is required');
+    if (!text) return res.status(400).json({ success: false, error: 'Text is required' });
 
     const options = {
         errorCorrectionLevel: errorLevel,
         margin: 1,
         width: parseInt(size),
-        color: {
-            dark: color,
-            light: bgColor
-        }
+        color: { dark: color, light: bgColor }
     };
 
     try {
         // --- SVG FORMAT ---
         if (format.toLowerCase() === 'svg') {
-            // Generate the raw SVG string
-            let svgString = await QRCode.toString(text, { ...options, type: 'svg' });
-            
-            /** * FIX: Some browsers need the XML declaration to render correctly 
-             * when sent as a standalone file.
-             */
-            if (!svgString.includes('xmlns')) {
-                svgString = svgString.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
-            }
+            const svgString = await QRCode.toString(text, { ...options, type: 'svg' });
+            const base64Svg = Buffer.from(svgString).toString('base64');
+            const svgDataUri = `data:image/svg+xml;base64,${base64Svg}`;
 
-            res.setHeader('Content-Type', 'image/svg+xml');
-            // We use .send() to keep it as raw image data
-            return res.status(200).send(svgString);
+            return res.status(200).json({
+                success: true,
+                format: 'svg',
+                data: svgDataUri,
+                message: 'SVG generated successfully. Use this string in an <img> tag src or browser address bar.'
+            });
         }
 
         // --- PNG FORMAT ---
         const qrDataUri = await QRCode.toDataURL(text, options);
-        res.status(200).json({
+        
+        return res.status(200).json({
             success: true,
             format: 'png',
-            data: qrDataUri
+            size: `${size}x${size}`,
+            data: qrDataUri,
+            message: 'PNG generated successfully. Use this string in an <img> tag src or browser address bar.'
         });
 
     } catch (err) {
-        res.status(500).send(`Generation failed: ${err.message}`);
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
