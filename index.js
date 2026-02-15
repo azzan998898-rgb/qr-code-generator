@@ -7,16 +7,13 @@ app.use(cors());
 app.use(express.json());
 
 /**
- * Health Check Endpoint
- * Useful for RapidAPI monitoring to ensure your service is up.
+ * Health Check
  */
-app.get('/', (req, res) => {
-    res.status(200).send('QR Generator API is online and ready.');
-});
+app.get('/', (req, res) => res.status(200).send('QR Generator API is online.'));
 
 /**
  * POST /generate
- * Primary endpoint for RapidAPI Marketplace
+ * Returns RAW SVG for clean viewing or JSON for PNG Base64.
  */
 app.post('/generate', async (req, res) => {
     const { 
@@ -28,15 +25,8 @@ app.post('/generate', async (req, res) => {
         size = 400 
     } = req.body;
 
-    // Validation: Ensure text is provided
-    if (!text) {
-        return res.status(400).json({ 
-            success: false, 
-            error: 'Text content is required' 
-        });
-    }
+    if (!text) return res.status(400).send('Error: Text is required');
 
-    // QR Code configuration options
     const options = {
         errorCorrectionLevel: errorLevel,
         margin: 1,
@@ -48,20 +38,19 @@ app.post('/generate', async (req, res) => {
     };
 
     try {
-        // Handle SVG Format
+        // --- SVG FORMAT (Direct Raw Response) ---
         if (format.toLowerCase() === 'svg') {
             const svgString = await QRCode.toString(text, { ...options, type: 'svg' });
-            return res.status(200).json({
-                success: true,
-                format: 'svg',
-                size: size,
-                data: svgString,
-                message: 'QR code generated as raw SVG XML code.'
-            });
+            
+            // This header tells browsers and apps "This is an image, not just text"
+            res.setHeader('Content-Type', 'image/svg+xml');
+            
+            // We send the string directly. 
+            // This prevents JSON from adding backslashes (\") to the quotes.
+            return res.status(200).send(svgString);
         }
 
-        // Handle PNG Format (Default)
-        // This generates a Base64 Data URI
+        // --- PNG FORMAT (JSON Response) ---
         const qrDataUri = await QRCode.toDataURL(text, options);
         
         res.status(200).json({
@@ -69,21 +58,13 @@ app.post('/generate', async (req, res) => {
             format: 'png',
             size: `${size}x${size}`,
             data: qrDataUri,
-            message: 'QR code generated as Base64 string. Use this in the src attribute of an <img> tag.'
+            message: 'Use this string in the src attribute of an <img> tag.'
         });
 
     } catch (err) {
-        console.error('Generation Error:', err);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Generation failed', 
-            details: err.message 
-        });
+        res.status(500).send(`Generation failed: ${err.message}`);
     }
 });
 
-// Start Server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`🚀 API is running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Server active on port ${PORT}`));
